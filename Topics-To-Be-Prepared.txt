@@ -1,0 +1,47 @@
+Introduction - Introduce about you
+
+Manual Testing:
+
+1. Software Development Lifecycle  (SDLC) -> Agile
+2. Software Testing Lifecycle (STLC) -> Testing in Agile
+3. Testing Levels
+4. Types of Testing -> White Box, Black box, Smoke, Functional, Sanity, Regression, System Testing (End to End Testing), Non-Functional Testing
+5. Test Strategy & Test Plan
+6. Test Case Enumeration Techniques -> Equivalence Partitioning, BVA, Decision Table, State Transition 
+7. Test Case - Design Process, template
+8. Test Execution
+9. Defect Lifecycle
+10. Testing Tools -> Test Management, Defect Management
+11. Testing Metrics
+12. Test Summary Report, Sign off process
+13. Test Design for few functionalities
+14. Real Time scenarios in Manual Testing
+
+Java:
+------
+1. OOPS Concepts - Inheritance, Polymorphism, Abstraction & Encapsulation
+	- Description
+	- Purpose / Benefits / Advantages
+	- Examples - Java, Selenium, Framework
+2. Arrays & String
+		https://github.com/LeafPages/JavaPrograms
+3. Collections - List, Set & Map
+4. Constructor, Java Keywords - this, super, final, static	
+5. Exception Handling
+
+Selenium:
+----------
+1. Selenium Internals
+2. Locators - focus more on writing xpath
+3. Verification & Validation Methods (Assertions)
+4. Selenium Waits (ImplicitlyWait, ExplicitlyWait, FluentWait)
+5. WebTable, Advanced User Interaction(Actions Class)
+6. Handling Alert, Frames & Window
+7. Exceptions you have faced in automation
+8. Automation Challenges
+
+Frameworks:
+-------------
+TestNG
+POM
+Hybrid Framework
