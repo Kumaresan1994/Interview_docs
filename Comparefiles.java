@@ -14,46 +14,41 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class XMLComparisonToExcel {
-    public static void main(String[] args) {
-        try {
-            // Read XML files
-            String expectedXml = new String(Files.readAllBytes(Paths.get("expected.xml")));
-            String actualXml = new String(Files.readAllBytes(Paths.get("actual.xml")));
+public class XMLComparisonUtil {
 
-            // Compare XML files
-            Diff diff = DiffBuilder.compare(Input.fromString(expectedXml))
-                    .withTest(Input.fromString(actualXml))
-                    .ignoreWhitespace()
-                    .checkForSimilar() // Use checkForIdentical() for strict match
-                    .build();
+    public static void compareXMLAndGenerateExcel(String expectedFilePath, String actualFilePath, String excelOutputPath) throws IOException {
+        // Read XML files
+        String expectedXml = new String(Files.readAllBytes(Paths.get(expectedFilePath)));
+        String actualXml = new String(Files.readAllBytes(Paths.get(actualFilePath)));
 
-            // Collect differences
-            List<String[]> differencesList = new ArrayList<>();
-            differencesList.add(new String[]{"Line", "XPath", "Expected Value", "Actual Value"}); // Header row
+        // Compare XML files
+        Diff diff = DiffBuilder.compare(Input.fromString(expectedXml))
+                .withTest(Input.fromString(actualXml))
+                .ignoreWhitespace()
+                .checkForSimilar()
+                .build();
 
-            if (diff.hasDifferences()) {
-                for (Difference d : diff.getDifferences()) {
-                    String description = d.toString();
+        // Collect differences
+        List<String[]> differencesList = new ArrayList<>();
+        differencesList.add(new String[]{"Line", "XPath", "Expected Value", "Actual Value"}); // Header row
 
-                    // Extract values using regex
-                    String expectedValue = extractValue(description, "Expected '(.*?)' but");
-                    String actualValue = extractValue(description, "but was '(.*?)' - at");
-                    String xPath = extractValue(description, "- at (.*?)$");
-                    int lineNumber = findLineNumber(expectedXml, expectedValue);
+        if (diff.hasDifferences()) {
+            for (Difference d : diff.getDifferences()) {
+                String description = d.toString();
 
-                    // Add to differences list
-                    differencesList.add(new String[]{String.valueOf(lineNumber), xPath, expectedValue, actualValue});
-                }
+                // Extract values
+                String expectedValue = extractValue(description, "Expected '(.*?)' but");
+                String actualValue = extractValue(description, "but was '(.*?)' - at");
+                String xPath = extractValue(description, "- at (.*?)$");
+                int lineNumber = findLineNumber(expectedXml, expectedValue);
+
+                // Add to list
+                differencesList.add(new String[]{String.valueOf(lineNumber), xPath, expectedValue, actualValue});
             }
-
-            // Write differences to Excel file
-            writeDifferencesToExcel("differences.xlsx", differencesList);
-            System.out.println("Differences written to differences.xlsx");
-
-        } catch (IOException e) {
-            e.printStackTrace();
         }
+
+        // Write differences to Excel
+        writeDifferencesToExcel(excelOutputPath, differencesList);
     }
 
     private static String extractValue(String text, String regex) {
@@ -67,7 +62,7 @@ public class XMLComparisonToExcel {
         String[] lines = content.split("\n");
         for (int i = 0; i < lines.length; i++) {
             if (lines[i].contains(value)) {
-                return i + 1; // Line numbers start from 1
+                return i + 1;
             }
         }
         return -1;
@@ -77,18 +72,18 @@ public class XMLComparisonToExcel {
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("XML Differences");
 
-        // Create header style
+        // Header style
         CellStyle headerStyle = workbook.createCellStyle();
         Font headerFont = workbook.createFont();
         headerFont.setBold(true);
         headerStyle.setFont(headerFont);
 
-        // Create highlight style for differences
+        // Highlight style
         CellStyle highlightStyle = workbook.createCellStyle();
         highlightStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
         highlightStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
-        // Write data to sheet
+        // Write data
         for (int i = 0; i < data.size(); i++) {
             Row row = sheet.createRow(i);
             for (int j = 0; j < data.get(i).length; j++) {
@@ -96,11 +91,8 @@ public class XMLComparisonToExcel {
                 cell.setCellValue(data.get(i)[j]);
 
                 // Apply styles
-                if (i == 0) {
-                    cell.setCellStyle(headerStyle); // Header styling
-                } else {
-                    cell.setCellStyle(highlightStyle); // Highlight differences
-                }
+                if (i == 0) cell.setCellStyle(headerStyle);
+                else cell.setCellStyle(highlightStyle);
             }
         }
 
