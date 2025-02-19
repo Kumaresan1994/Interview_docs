@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bookstore>
+    <book>
+        <title>Java Programming</title>
+        <author>John Doe</author>
+        <price>39.99</price>
+    </book>
+    <book>
+        <title>Python Basics</title>
+        <author>Jane Smith</author>
+        <price>29.99</price>
+    </book>
+    <book>
+        <title>Machine Learning</title>
+        <author>Alan Turing</author>
+        <price>49.99</price>
+    </book>
+</bookstore>
