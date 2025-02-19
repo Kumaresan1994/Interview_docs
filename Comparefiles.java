@@ -11,8 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class XMLComparisonUtil {
 
@@ -34,12 +32,14 @@ public class XMLComparisonUtil {
 
         if (diff.hasDifferences()) {
             for (Difference d : diff.getDifferences()) {
-                String description = d.toString();
+                String xPath = d.getComparison().getControlDetails().getXPath();
+                String expectedValue = d.getComparison().getControlDetails().getValue() != null 
+                        ? d.getComparison().getControlDetails().getValue().toString() 
+                        : "N/A";
+                String actualValue = d.getComparison().getTestDetails().getValue() != null 
+                        ? d.getComparison().getTestDetails().getValue().toString() 
+                        : "N/A";
 
-                // Extract values
-                String expectedValue = extractValue(description, "Expected '(.*?)' but");
-                String actualValue = extractValue(description, "but was '(.*?)' - at");
-                String xPath = extractValue(description, "- at (.*?)$");
                 int lineNumber = findLineNumber(expectedXml, expectedValue);
 
                 // Add to list
@@ -49,12 +49,6 @@ public class XMLComparisonUtil {
 
         // Write differences to Excel
         writeDifferencesToExcel(excelOutputPath, differencesList);
-    }
-
-    private static String extractValue(String text, String regex) {
-        Pattern pattern = Pattern.compile(regex);
-        Matcher matcher = pattern.matcher(text);
-        return matcher.find() ? matcher.group(1) : "N/A";
     }
 
     private static int findLineNumber(String content, String value) {
