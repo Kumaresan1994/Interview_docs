@@ -1,0 +1,103 @@
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.xmlunit.builder.DiffBuilder;
+import org.xmlunit.builder.Input;
+import org.xmlunit.diff.Diff;
+import org.xmlunit.diff.Difference;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.*;
+
+public class XMLComparisonUtil {
+
+    public static void compareXMLAndGenerateExcel(String expectedFilePath, String actualFilePath, String excelOutputPath) throws IOException {
+        // Read XML files
+        String expectedXml = new String(Files.readAllBytes(Paths.get(expectedFilePath)));
+        String actualXml = new String(Files.readAllBytes(Paths.get(actualFilePath)));
+
+        // Compare XML files
+        Diff diff = DiffBuilder.compare(Input.fromString(expectedXml))
+                .withTest(Input.fromString(actualXml))
+                .ignoreWhitespace()
+                .checkForSimilar()
+                .build();
+
+        // Store differences in a map (XPath -> Expected, Actual)
+        Map<String, String[]> differencesMap = new HashMap<>();
+
+        if (diff.hasDifferences()) {
+            for (Difference d : diff.getDifferences()) {
+                String xPath = d.getComparison().getControlDetails().getXPath();
+                String expectedValue = d.getComparison().getControlDetails().getValue() != null
+                        ? d.getComparison().getControlDetails().getValue().toString()
+                        : "N/A";
+                String actualValue = d.getComparison().getTestDetails().getValue() != null
+                        ? d.getComparison().getTestDetails().getValue().toString()
+                        : "N/A";
+
+                differencesMap.put(xPath, new String[]{expectedValue, actualValue});
+            }
+        }
+
+        // Write all records to Excel, highlighting only differences
+        writeAllRecordsToExcel(excelOutputPath, expectedXml, actualXml, differencesMap);
+    }
+
+    private static void writeAllRecordsToExcel(String fileName, String expectedXml, String actualXml, Map<String, String[]> differences) throws IOException {
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("XML Comparison");
+
+        // Create header row
+        Row headerRow = sheet.createRow(0);
+        String[] headers = {"XPath", "Expected Value", "Actual Value"};
+        for (int i = 0; i < headers.length; i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers[i]);
+            CellStyle style = workbook.createCellStyle();
+            Font font = workbook.createFont();
+            font.setBold(true);
+            style.setFont(font);
+            cell.setCellStyle(style);
+        }
+
+        // Styles for highlighting differences
+        CellStyle highlightStyle = workbook.createCellStyle();
+        highlightStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+        highlightStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        // Store all XML nodes in the Excel sheet
+        int rowNum = 1;
+        for (Map.Entry<String, String[]> entry : differences.entrySet()) {
+            Row row = sheet.createRow(rowNum++);
+            Cell xPathCell = row.createCell(0);
+            xPathCell.setCellValue(entry.getKey());
+
+            Cell expectedCell = row.createCell(1);
+            expectedCell.setCellValue(entry.getValue()[0]);
+
+            Cell actualCell = row.createCell(2);
+            actualCell.setCellValue(entry.getValue()[1]);
+
+            // Highlight only mismatches
+            if (!entry.getValue()[0].equals(entry.getValue()[1])) {
+                expectedCell.setCellStyle(highlightStyle);
+                actualCell.setCellStyle(highlightStyle);
+            }
+        }
+
+        // Auto-size columns for better readability
+        for (int i = 0; i < headers.length; i++) {
+            sheet.autoSizeColumn(i);
+        }
+
+        // Write to file
+        try (FileOutputStream outputStream = new FileOutputStream(fileName)) {
+            workbook.write(outputStream);
+        }
+
+        workbook.close();
+    }
+}
