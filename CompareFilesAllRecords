@@ -1,124 +1,130 @@
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.xmlunit.builder.DiffBuilder;
-import org.xmlunit.builder.Input;
-import org.xmlunit.diff.Diff;
-import org.xmlunit.diff.Difference;
+import org.apache.commons.io.input.BOMInputStream; import org.apache.poi.ss.usermodel.; import org.apache.poi.xssf.usermodel.XSSFWorkbook; import org.w3c.dom.; import org.xml.sax.InputSource; import org.xmlunit.builder.DiffBuilder; import org.xmlunit.builder.Input; import org.xmlunit.diff.Diff; import org.xmlunit.diff.Difference;
 
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.*;
+import javax.xml.parsers.DocumentBuilder; import javax.xml.parsers.DocumentBuilderFactory; import java.io.; import java.nio.charset.StandardCharsets; import java.nio.file.Files; import java.nio.file.Paths; import java.util.;
 
-public class XMLComparisonUtil {
+public class XMLComparisonUtil { public static void compareXMLAndGenerateExcel(String expectedFilePath, String actualFilePath, String excelOutputPath) throws Exception { // Read XML files after removing BOM String expectedXml = removeBOMAndTrim(new String(Files.readAllBytes(Paths.get(expectedFilePath)), StandardCharsets.UTF_8)); String actualXml = removeBOMAndTrim(new String(Files.readAllBytes(Paths.get(actualFilePath)), StandardCharsets.UTF_8));
 
-    public static void compareXMLAndGenerateExcel(String expectedFilePath, String actualFilePath, String excelOutputPath) throws IOException {
-        // Read XML files and remove BOM/whitespace
-        String expectedXml = removeBOMAndTrim(new String(Files.readAllBytes(Paths.get(expectedFilePath)), StandardCharsets.UTF_8));
-        String actualXml = removeBOMAndTrim(new String(Files.readAllBytes(Paths.get(actualFilePath)), StandardCharsets.UTF_8));
+// Parse XML into Document objects
+    Document expectedDoc = parseXML(expectedXml);
+    Document actualDoc = parseXML(actualXml);
 
-        // Compare XML files
-        Diff diff = DiffBuilder.compare(Input.fromString(expectedXml))
-                .withTest(Input.fromString(actualXml))
-                .ignoreWhitespace()
-                .checkForSimilar()
-                .build();
+    // Compare XML files
+    Diff diff = DiffBuilder.compare(Input.fromString(expectedXml))
+            .withTest(Input.fromString(actualXml))
+            .ignoreWhitespace()
+            .checkForSimilar()
+            .build();
 
-        // Store all records (both matching and different) in insertion order
-        List<String[]> allRecords = new ArrayList<>();
-        allRecords.add(new String[]{"Line", "XPath", "Expected Value", "Actual Value"}); // Header row
+    // Store all records (matches and differences) in insertion order
+    List<String[]> allRecords = new ArrayList<>();
+    allRecords.add(new String[]{"Line", "XPath", "Expected Value", "Actual Value", "Status"}); // Header
 
-        // Store differences in a LinkedHashMap to maintain order
-        Map<String, String[]> differencesMap = new LinkedHashMap<>();
-
-        if (diff.hasDifferences()) {
-            for (Difference d : diff.getDifferences()) {
-                String xPath = d.getComparison().getControlDetails().getXPath();
-                String expectedValue = d.getComparison().getControlDetails().getValue() != null
-                        ? d.getComparison().getControlDetails().getValue().toString().trim()
-                        : "N/A";
-                String actualValue = d.getComparison().getTestDetails().getValue() != null
-                        ? d.getComparison().getTestDetails().getValue().toString().trim()
-                        : "N/A";
-
-                int lineNumber = findLineNumber(expectedXml, expectedValue);
-
-                differencesMap.put(xPath, new String[]{String.valueOf(lineNumber), expectedValue, actualValue});
-            }
+    // Process differences
+    Map<String, String[]> differencesMap = new LinkedHashMap<>();
+    if (diff.hasDifferences()) {
+        for (Difference d : diff.getDifferences()) {
+            String xPath = d.getComparison().getControlDetails().getXPath();
+            String expectedValue = d.getComparison().getControlDetails().getValue() != null ? d.getComparison().getControlDetails().getValue().toString().trim() : "N/A";
+            String actualValue = d.getComparison().getTestDetails().getValue() != null ? d.getComparison().getTestDetails().getValue().toString().trim() : "N/A";
+            int lineNumber = findLineNumber(expectedXml, expectedValue);
+            differencesMap.put(xPath, new String[]{String.valueOf(lineNumber), expectedValue, actualValue, "Not Matched"});
         }
-
-        // Add all records to the list in the correct order
-        for (Map.Entry<String, String[]> entry : differencesMap.entrySet()) {
-            allRecords.add(new String[]{entry.getValue()[0], entry.getKey(), entry.getValue()[1], entry.getValue()[2]});
-        }
-
-        // Write to Excel
-        writeRecordsToExcel(excelOutputPath, allRecords);
     }
 
-    // Removes BOM and trims unnecessary white space
-    private static String removeBOMAndTrim(String content) {
-        if (content.startsWith("\uFEFF")) {
-            content = content.substring(1);
-        }
-        return content.replaceAll(">\\s+<", "><").trim();
-    }
-
-    // Finds the line number for a given value in XML
-    private static int findLineNumber(String content, String value) {
-        if (value.equals("N/A")) return -1;
-        String[] lines = content.split("\n");
-        for (int i = 0; i < lines.length; i++) {
-            if (lines[i].contains(value)) {
-                return i + 1;
+    // Process all elements and check for matches
+    NodeList expectedNodes = expectedDoc.getElementsByTagName("*");
+    for (int i = 0; i < expectedNodes.getLength(); i++) {
+        Node node = expectedNodes.item(i);
+        if (node.getNodeType() == Node.ELEMENT_NODE) {
+            String xPath = getXPath(node);
+            String value = node.getTextContent().trim();
+            int lineNumber = findLineNumber(expectedXml, value);
+            
+            if (differencesMap.containsKey(xPath)) {
+                allRecords.add(new String[]{String.valueOf(lineNumber), xPath, differencesMap.get(xPath)[1], differencesMap.get(xPath)[2], "Not Matched"});
+            } else {
+                allRecords.add(new String[]{String.valueOf(lineNumber), xPath, value, value, "Matched"});
             }
         }
-        return -1;
     }
+    
+    // Write to Excel
+    writeRecordsToExcel(excelOutputPath, allRecords);
+}
 
-    private static void writeRecordsToExcel(String fileName, List<String[]> data) throws IOException {
-        Workbook workbook = new XSSFWorkbook();
-        Sheet sheet = workbook.createSheet("XML Comparison");
-
-        // Header Style
-        CellStyle headerStyle = workbook.createCellStyle();
-        Font headerFont = workbook.createFont();
-        headerFont.setBold(true);
-        headerStyle.setFont(headerFont);
-
-        // Highlight Style for differences
-        CellStyle highlightStyle = workbook.createCellStyle();
-        highlightStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
-        highlightStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-        // Write data
-        for (int i = 0; i < data.size(); i++) {
-            Row row = sheet.createRow(i);
-            for (int j = 0; j < data.get(i).length; j++) {
-                Cell cell = row.createCell(j);
-                cell.setCellValue(data.get(i)[j]);
-
-                // Apply header style
-                if (i == 0) cell.setCellStyle(headerStyle);
-
-                // Apply highlight style to differences
-                else if (j >= 2 && !data.get(i)[2].equals(data.get(i)[3])) {
-                    cell.setCellStyle(highlightStyle);
-                }
-            }
-        }
-
-        // Auto-size columns
-        for (int i = 0; i < data.get(0).length; i++) {
-            sheet.autoSizeColumn(i);
-        }
-
-        // Write to file
-        try (FileOutputStream outputStream = new FileOutputStream(fileName)) {
-            workbook.write(outputStream);
-        }
-
-        workbook.close();
+private static String removeBOMAndTrim(String content) throws IOException {
+    try (BOMInputStream bomInputStream = new BOMInputStream(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)))) {
+        return new String(bomInputStream.readAllBytes(), StandardCharsets.UTF_8).replaceAll(">\\s+<", "><").trim();
     }
 }
+
+private static Document parseXML(String xmlContent) throws Exception {
+    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+    factory.setIgnoringElementContentWhitespace(true);
+    DocumentBuilder builder = factory.newDocumentBuilder();
+    return builder.parse(new InputSource(new StringReader(xmlContent)));
+}
+
+private static String getXPath(Node node) {
+    StringBuilder xpath = new StringBuilder();
+    while (node != null && node.getNodeType() == Node.ELEMENT_NODE) {
+        xpath.insert(0, "/" + node.getNodeName());
+        node = node.getParentNode();
+    }
+    return xpath.toString();
+}
+
+private static int findLineNumber(String content, String value) {
+    if (value.equals("N/A")) return -1;
+    String[] lines = content.split("\n");
+    for (int i = 0; i < lines.length; i++) {
+        if (lines[i].contains(value)) {
+            return i + 1;
+        }
+    }
+    return -1;
+}
+
+private static void writeRecordsToExcel(String fileName, List<String[]> data) throws IOException {
+    Workbook workbook = new XSSFWorkbook();
+    Sheet sheet = workbook.createSheet("XML Comparison");
+
+    // Styles
+    CellStyle headerStyle = workbook.createCellStyle();
+    Font headerFont = workbook.createFont();
+    headerFont.setBold(true);
+    headerStyle.setFont(headerFont);
+    
+    CellStyle highlightStyle = workbook.createCellStyle();
+    highlightStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+    highlightStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+    
+    // Write data
+    for (int i = 0; i < data.size(); i++) {
+        Row row = sheet.createRow(i);
+        for (int j = 0; j < data.get(i).length; j++) {
+            Cell cell = row.createCell(j);
+            cell.setCellValue(data.get(i)[j]);
+            if (i == 0) {
+                cell.setCellStyle(headerStyle);
+            } else if (data.get(i)[4].equals("Not Matched")) {
+                cell.setCellStyle(highlightStyle);
+            }
+        }
+    }
+
+    // Auto-size columns
+    for (int i = 0; i < data.get(0).length; i++) {
+        sheet.autoSizeColumn(i);
+    }
+
+    // Write to file
+    try (FileOutputStream outputStream = new FileOutputStream(fileName)) {
+        workbook.write(outputStream);
+    }
+
+    workbook.close();
+}
+
+}
+
