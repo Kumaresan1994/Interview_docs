@@ -1,5 +1,6 @@
 import org.w3c.dom.*;
 import javax.xml.parsers.*;
+import org.xml.sax.InputSource;
 import org.xmlunit.builder.DiffBuilder;
 import org.xmlunit.diff.*;
 import org.apache.poi.ss.usermodel.*;
@@ -13,7 +14,7 @@ import java.util.*;
 public class XMLComparator {
 
     public void compareXMLAndGenerateExcel(String expectedFilePath, String actualFilePath, String excelOutputPath) throws Exception {
-        // Read XML files after removing BOM
+        // Read XML files
         String expectedXml = new String(Files.readAllBytes(Paths.get(expectedFilePath)), StandardCharsets.UTF_8).trim();
         String actualXml = new String(Files.readAllBytes(Paths.get(actualFilePath)), StandardCharsets.UTF_8).trim();
 
@@ -21,7 +22,7 @@ public class XMLComparator {
         Document expectedDoc = parseXML(expectedXml);
         Document actualDoc = parseXML(actualXml);
 
-        // Precompute XPath-to-value map for the ACTUAL document
+        // Build XPath-value map for ACTUAL document
         Map<String, String> actualXPathValueMap = new LinkedHashMap<>();
         buildXPathValueMap(actualDoc.getDocumentElement(), actualXPathValueMap);
 
@@ -41,7 +42,7 @@ public class XMLComparator {
         if (diff.hasDifferences()) {
             for (Difference d : diff.getDifferences()) {
                 String xPath = d.getComparison().getControlDetails().getXPath();
-                String expectedValue = d.getComparison().getControlDetails().getValue() != null ?
+                String expectedValue = (d.getComparison().getControlDetails().getValue() != null) ?
                         d.getComparison().getControlDetails().getValue().toString() : "N/A";
                 String actualValue = actualXPathValueMap.getOrDefault(xPath, "N/A");
                 int lineNumber = findLineNumber(expectedXml, expectedValue);
@@ -52,7 +53,7 @@ public class XMLComparator {
         // Process all elements in the EXPECTED document
         processNodes(expectedDoc.getDocumentElement(), actualXPathValueMap, differencesMap, allRecords, expectedXml);
 
-        // Write to Excel
+        // Write results to Excel
         writeRecordsToExcel(excelOutputPath, allRecords);
     }
 
@@ -62,7 +63,6 @@ public class XMLComparator {
             String xpath = getXPath(node);
             String value = node.getTextContent().trim();
             xpathValueMap.put(xpath, value);
-            System.out.println("ACTUAL XML: " + xpath + " = " + value);
         }
 
         NodeList children = node.getChildNodes();
@@ -79,10 +79,6 @@ public class XMLComparator {
             String expectedValue = node.getTextContent().trim();
             String actualValue = actualXPathValueMap.getOrDefault(xPath, "N/A");
             int lineNumber = findLineNumber(expectedXml, expectedValue);
-
-            System.out.println("Processing XPath: " + xPath + 
-                               " | Expected: " + expectedValue + 
-                               " | Actual: " + actualValue);
 
             if (differencesMap.containsKey(xPath)) {
                 allRecords.add(new String[]{
@@ -130,6 +126,28 @@ public class XMLComparator {
             current = current.getParentNode();
         }
         return xpath.toString();
+    }
+
+    // Get the index of a node among its siblings with the same name
+    private static int getNodeIndex(Node node) {
+        if (node == null || node.getParentNode() == null) {
+            return 1;
+        }
+
+        Node parent = node.getParentNode();
+        NodeList siblings = parent.getChildNodes();
+        int index = 1;
+
+        for (int i = 0; i < siblings.getLength(); i++) {
+            Node sibling = siblings.item(i);
+            if (sibling.getNodeType() == Node.ELEMENT_NODE && sibling.getNodeName().equals(node.getNodeName())) {
+                if (sibling == node) {
+                    return index;
+                }
+                index++;
+            }
+        }
+        return index;
     }
 
     // Find the line number of a value in the XML content
