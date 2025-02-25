@@ -21,9 +21,9 @@ public class XMLComparator {
         Document expectedDoc = parseXML(expectedXml);
         Document actualDoc = parseXML(actualXml);
 
-        // Compare XML files
-        Diff diff = DiffBuilder.compare(Input.fromString(expectedXml))
-                .withTest(Input.fromString(actualXml))
+        // Compare XML files using XMLUnit
+        Diff diff = DiffBuilder.compare(Input.fromDocument(expectedDoc))
+                .withTest(Input.fromDocument(actualDoc))
                 .ignoreWhitespace()
                 .checkForSimilar()
                 .build();
@@ -45,24 +45,30 @@ public class XMLComparator {
         }
 
         // Process all elements and check for matches
-        NodeList expectedNodes = expectedDoc.getElementsByTagName("*");
-        for (int i = 0; i < expectedNodes.getLength(); i++) {
-            Node node = expectedNodes.item(i);
-            if (node.getNodeType() == Node.ELEMENT_NODE) {
-                String xPath = getXPath(node);
-                String value = node.getTextContent().trim();
-                int lineNumber = findLineNumber(expectedXml, value);
-                if (differencesMap.containsKey(xPath)) {
-                    allRecords.add(new String[]{String.valueOf(lineNumber), xPath, differencesMap.get(xPath)[1], differencesMap.get(xPath)[2], "Not Matched"});
-                    differencesMap.remove(xPath); // Remove the processed difference
-                } else {
-                    allRecords.add(new String[]{String.valueOf(lineNumber), xPath, value, value, "Matched"});
-                }
-            }
-        }
+        processNodes(expectedDoc.getDocumentElement(), differencesMap, allRecords, expectedXml);
 
         // Write to Excel
         writeRecordsToExcel(excelOutputPath, allRecords);
+    }
+
+    private static void processNodes(Node node, Map<String, String[]> differencesMap, List<String[]> allRecords, String expectedXml) {
+        if (node.getNodeType() == Node.ELEMENT_NODE) {
+            String xPath = getXPath(node);
+            String value = node.getTextContent().trim();
+            int lineNumber = findLineNumber(expectedXml, value);
+            if (differencesMap.containsKey(xPath)) {
+                allRecords.add(new String[]{String.valueOf(lineNumber), xPath, differencesMap.get(xPath)[1], differencesMap.get(xPath)[2], "Not Matched"});
+                differencesMap.remove(xPath); // Remove the processed difference
+            } else {
+                allRecords.add(new String[]{String.valueOf(lineNumber), xPath, value, value, "Matched"});
+            }
+        }
+
+        // Recursively process child nodes
+        NodeList children = node.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            processNodes(children.item(i), differencesMap, allRecords, expectedXml);
+        }
     }
 
     private static String removeBOMAndTrim(String content) throws IOException {
