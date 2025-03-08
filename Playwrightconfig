@@ -1,0 +1,25 @@
+import { defineConfig } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Function to generate a formatted date-time string
+function getDateTimeSuffix(): string {
+    return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+// Base directory for reports
+const reportsBaseDir: string = path.join(__dirname, 'reports');
+
+// Create a date-time-based folder
+const dateFolder: string = path.join(reportsBaseDir, getDateTimeSuffix());
+if (!fs.existsSync(dateFolder)) {
+    fs.mkdirSync(dateFolder, { recursive: true });
+}
+
+// Generate a unique report name inside the date-time folder
+const reportFolderName: string = `report-${getDateTimeSuffix()}`;
+const reportOutputPath: string = path.join(dateFolder, reportFolderName);
+
+export default defineConfig({
+    reporter: [['html', { outputFolder: reportOutputPath }]],
+});
